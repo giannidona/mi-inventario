@@ -19,19 +19,16 @@ import {
   processUploadedProductPhoto,
   validateImageFile,
 } from "@/lib/process-product-photo"
+import {
+  loadInventoryProducts,
+  saveInventoryProducts,
+  type InventoryProduct,
+} from "@/lib/inventory-storage"
 
 type Category = "All" | "Perfumes" | "Ropa" | "Zapatillas" | "Accesorios"
 type Status = "En uso" | "Guardado" | "Wishlist"
 
-interface Product {
-  id: number
-  name: string
-  brand: string
-  category: Exclude<Category, "All">
-  image: string
-  notes?: string
-  status: Status
-}
+type Product = InventoryProduct
 
 const categories: Category[] = ["All", "Perfumes", "Ropa", "Zapatillas", "Accesorios"]
 
@@ -52,6 +49,7 @@ const EMPTY_NEW_ITEM = {
 
 export default function MiInventory() {
   const [products, setProducts] = useState<Product[]>([])
+  const [inventoryHydrated, setInventoryHydrated] = useState(false)
   const [activeCategory, setActiveCategory] = useState<Category>("All")
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false)
@@ -67,6 +65,17 @@ export default function MiInventory() {
   const [photoError, setPhotoError] = useState<string | null>(null)
 
   const [addSheetWide, setAddSheetWide] = useState(false)
+
+  useEffect(() => {
+    setProducts(loadInventoryProducts())
+    setInventoryHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!inventoryHydrated) return
+    saveInventoryProducts(products)
+  }, [products, inventoryHydrated])
+
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)")
     const update = () => setAddSheetWide(mq.matches)
