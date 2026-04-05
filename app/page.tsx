@@ -277,54 +277,43 @@ export default function MiInventory() {
       {/* Product Detail Popup */}
       {selectedProduct && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center p-8 cursor-pointer"
           onClick={() => setSelectedProduct(null)}
         >
           {/* Blurred Backdrop */}
-          <div className="absolute inset-0 bg-[#000000]/30 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-[#000000]/40 backdrop-blur-md" />
           
-          {/* Popup Content */}
-          <div 
-            className="relative bg-[#FFFFFF] w-full max-w-lg flex overflow-hidden shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+          {/* Popup Content - No background, larger */}
+          <div className="relative w-full max-w-2xl flex items-center gap-10">
             {/* Product Image - Left Side */}
-            <div className="w-1/2 bg-[#FAFAFA] flex items-center justify-center p-6">
+            <div className="w-1/2 flex items-center justify-center">
               <img 
                 src={selectedProduct.image} 
                 alt={selectedProduct.name}
-                className="w-full h-full object-contain"
+                className="w-full max-w-[280px] h-auto object-contain drop-shadow-2xl"
               />
             </div>
             
             {/* Product Info - Right Side */}
-            <div className="w-1/2 p-6 flex flex-col justify-center">
-              <p className="text-xs text-[#888888] mb-1">{selectedProduct.brand}</p>
-              <h2 className="text-lg font-semibold text-[#000000] mb-4">{selectedProduct.name}</h2>
+            <div className="w-1/2 flex flex-col justify-center">
+              <p className="text-sm text-[#FFFFFF]/70 mb-2">{selectedProduct.brand}</p>
+              <h2 className="text-3xl font-semibold text-[#FFFFFF] mb-6">{selectedProduct.name}</h2>
               
-              <div className="flex flex-wrap gap-2 mb-4">
-                <span className={cn("px-3 py-1 text-xs font-medium", statusColors[selectedProduct.status])}>
+              <div className="flex flex-wrap gap-3 mb-6">
+                <span className="px-4 py-2 text-sm font-medium bg-[#FFFFFF]/20 text-[#FFFFFF] backdrop-blur-sm">
                   {selectedProduct.status}
                 </span>
-                <span className="px-3 py-1 text-xs font-medium bg-[#F5F5F5] text-[#888888]">
+                <span className="px-4 py-2 text-sm font-medium bg-[#FFFFFF]/10 text-[#FFFFFF]/80 backdrop-blur-sm">
                   {selectedProduct.category}
                 </span>
               </div>
               
               {selectedProduct.notes && (
                 <div>
-                  <p className="text-[10px] text-[#888888] mb-1">Notas</p>
-                  <p className="text-sm text-[#000000]">{selectedProduct.notes}</p>
+                  <p className="text-xs text-[#FFFFFF]/50 mb-2">Notas</p>
+                  <p className="text-base text-[#FFFFFF]/90">{selectedProduct.notes}</p>
                 </div>
               )}
-              
-              {/* Close button */}
-              <button 
-                onClick={() => setSelectedProduct(null)}
-                className="mt-6 py-2 text-xs text-[#888888] hover:text-[#000000] transition-colors"
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>
