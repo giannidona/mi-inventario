@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { toast } from "sonner"
 import { Grid3X3, LayoutGrid, Search, User, Plus, ShoppingBag, ImageIcon } from "lucide-react"
 import {
@@ -15,15 +15,15 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import {
-  blobToDataUrl,
   processUploadedProductPhoto,
   validateImageFile,
 } from "@/lib/process-product-photo"
+import type { InventoryProduct } from "@/lib/inventory-types"
 import {
-  loadInventoryProducts,
-  saveInventoryProducts,
-  type InventoryProduct,
-} from "@/lib/inventory-storage"
+  createInventoryItem,
+  fetchInventoryItems,
+} from "@/lib/inventory-supabase"
+import { createClient } from "@/utils/supabase/client"
 
 type Category = "All" | "Perfumes" | "Ropa" | "Zapatillas" | "Accesorios"
 type Status = "En uso" | "Guardado" | "Wishlist"
@@ -48,8 +48,10 @@ const EMPTY_NEW_ITEM = {
 }
 
 export default function MiInventory() {
+  const supabase = useMemo(() => createClient(), [])
+  const [userId, setUserId] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>([])
-  const [inventoryHydrated, setInventoryHydrated] = useState(false)
+  const [inventoryLoading, setInventoryLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<Category>("All")
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false)
@@ -63,18 +65,45 @@ export default function MiInventory() {
   const [processStatus, setProcessStatus] = useState("")
   const [processPercent, setProcessPercent] = useState(0)
   const [photoError, setPhotoError] = useState<string | null>(null)
+  const [isSavingItem, setIsSavingItem] = useState(false)
 
   const [addSheetWide, setAddSheetWide] = useState(false)
 
   useEffect(() => {
-    setProducts(loadInventoryProducts())
-    setInventoryHydrated(true)
-  }, [])
-
-  useEffect(() => {
-    if (!inventoryHydrated) return
-    saveInventoryProducts(products)
-  }, [products, inventoryHydrated])
+    let cancelled = false
+    async function initInventory() {
+      setInventoryLoading(true)
+      try {
+        let {
+          data: { session },
+        } = await supabase.auth.getSession()
+        if (!session) {
+          const { data, error } = await supabase.auth.signInAnonymously()
+          if (error) throw error
+          session = data.session
+        }
+        const uid = session?.user?.id
+        if (!uid) throw new Error("Missing user")
+        if (cancelled) return
+        setUserId(uid)
+        const items = await fetchInventoryItems(supabase)
+        if (!cancelled) setProducts(items)
+      } catch (e) {
+        console.error(e)
+        if (!cancelled) {
+          toast.error(
+            "Could not load inventory. Run the SQL migration in Supabase and enable Anonymous sign-in (Authentication → Providers)."
+          )
+        }
+      } finally {
+        if (!cancelled) setInventoryLoading(false)
+      }
+    }
+    void initInventory()
+    return () => {
+      cancelled = true
+    }
+  }, [supabase])
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)")
@@ -154,6 +183,10 @@ export default function MiInventory() {
   }
 
   const handleAddProduct = async () => {
+    if (!userId) {
+      toast.error("Session not ready. Wait a moment or refresh the page.")
+      return
+    }
     if (!processedBlob || !previewUrl) {
       toast.error("Upload a photo first — we will remove the background and enhance it.")
       return
@@ -163,27 +196,29 @@ export default function MiInventory() {
       return
     }
 
+    setIsSavingItem(true)
     try {
-      const imageDataUrl = await blobToDataUrl(processedBlob)
-      const nextId = products.reduce((max, p) => Math.max(max, p.id), 0) + 1
-      const product: Product = {
-        id: nextId,
+      const product = await createInventoryItem(supabase, userId, processedBlob, {
         name: newItem.name.trim(),
         brand: newItem.brand.trim() || "—",
         category: newItem.category,
-        image: imageDataUrl,
         status: newItem.status,
         notes: newItem.notes.trim() || undefined,
-      }
+      })
       setProducts((prev) => [product, ...prev])
       URL.revokeObjectURL(previewUrl)
       setPreviewUrl(null)
       setProcessedBlob(null)
       setNewItem(EMPTY_NEW_ITEM)
       setIsAddSheetOpen(false)
-      toast.success("Item added to your inventory.")
-    } catch {
-      toast.error("Could not save the image. Try again.")
+      toast.success("Item saved to your account.")
+    } catch (e) {
+      console.error(e)
+      toast.error(
+        e instanceof Error ? e.message : "Could not save the item. Check Supabase table and storage policies."
+      )
+    } finally {
+      setIsSavingItem(false)
     }
   }
 
@@ -265,44 +300,65 @@ export default function MiInventory() {
           {/* Home Tab - Product Grid */}
           {activeTab === "home" && (
             <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 md:px-8 lg:px-10">
-              <div className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
-                {filteredProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="group relative cursor-pointer"
-                    onClick={() => setSelectedProduct(product)}
+              {inventoryLoading ? (
+                <div className="flex min-h-[45vh] flex-col items-center justify-center gap-3">
+                  <Spinner className="size-8 text-[#000000]" />
+                  <p className="text-xs text-[#888888]">Loading your inventory…</p>
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="flex min-h-[45vh] flex-col items-center justify-center gap-2 px-4 text-center">
+                  <p className="text-sm font-medium text-[#000000]">No items yet</p>
+                  <p className="max-w-sm text-xs text-[#888888]">
+                    Add a photo to create your first item. It will be saved to your account.
+                  </p>
+                  <Button
+                    type="button"
+                    className="mt-2 bg-[#000000] text-[#FFFFFF] hover:bg-[#333333]"
+                    onClick={() => setIsAddSheetOpen(true)}
                   >
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setIsAddSheetOpen(true)
-                      }}
-                      className="absolute top-0 right-0 z-10 flex size-6 items-center justify-center opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-100 max-md:pointer-events-auto max-md:opacity-100 md:size-5"
-                      aria-label="Add item"
+                    Add item
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
+                  {filteredProducts.map((product) => (
+                    <div
+                      key={product.id}
+                      className="group relative cursor-pointer"
+                      onClick={() => setSelectedProduct(product)}
                     >
-                      <Plus className="size-3 text-[#888888]" strokeWidth={2} />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setIsAddSheetOpen(true)
+                        }}
+                        className="absolute top-0 right-0 z-10 flex size-6 items-center justify-center opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-100 max-md:pointer-events-auto max-md:opacity-100 md:size-5"
+                        aria-label="Add item"
+                      >
+                        <Plus className="size-3 text-[#888888]" strokeWidth={2} />
+                      </button>
 
-                    <div className="flex aspect-square items-center justify-center">
-                      <img
-                        src={product.image}
-                        alt={product.name}
-                        className="size-full object-contain"
-                      />
-                    </div>
+                      <div className="flex aspect-square items-center justify-center">
+                        <img
+                          src={product.image}
+                          alt={product.name}
+                          className="size-full object-contain"
+                        />
+                      </div>
 
-                    <div className="pt-1 text-center">
-                      <p className="truncate text-[9px] text-[#888888] md:text-[10px]">
-                        {product.brand}
-                      </p>
-                      <p className="truncate text-[10px] font-semibold text-[#000000] md:text-xs">
-                        {product.name}
-                      </p>
+                      <div className="pt-1 text-center">
+                        <p className="truncate text-[9px] text-[#888888] md:text-[10px]">
+                          {product.brand}
+                        </p>
+                        <p className="truncate text-[10px] font-semibold text-[#000000] md:text-xs">
+                          {product.name}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -634,11 +690,14 @@ export default function MiInventory() {
               type="button"
               className="h-12 w-full rounded-none bg-[#000000] text-sm font-medium text-[#FFFFFF] hover:bg-[#333333] disabled:opacity-50"
               disabled={
-                !processedBlob || !newItem.name.trim() || isProcessingPhoto
+                !processedBlob ||
+                !newItem.name.trim() ||
+                isProcessingPhoto ||
+                isSavingItem
               }
               onClick={() => void handleAddProduct()}
             >
-              Add to Inventory
+              {isSavingItem ? "Saving…" : "Add to Inventory"}
             </Button>
           </div>
         </SheetContent>
