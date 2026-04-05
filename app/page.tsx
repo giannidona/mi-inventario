@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Grid3X3, LayoutGrid, Search, User, Plus, ShoppingBag, Upload } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { toast } from "sonner"
+import { Grid3X3, LayoutGrid, Search, User, Plus, ShoppingBag, ImageIcon } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -11,7 +12,13 @@ import {
 } from "@/components/ui/sheet"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
+import {
+  blobToDataUrl,
+  processUploadedProductPhoto,
+  validateImageFile,
+} from "@/lib/process-product-photo"
 
 type Category = "All" | "Perfumes" | "Ropa" | "Zapatillas" | "Accesorios"
 type Status = "En uso" | "Guardado" | "Wishlist"
@@ -26,7 +33,7 @@ interface Product {
   status: Status
 }
 
-const mockProducts: Product[] = [
+const INITIAL_PRODUCTS: Product[] = [
   // Perfumes
   { id: 1, name: "Sauvage", brand: "Dior", category: "Perfumes", image: "/images/perfume-bottle.jpg", status: "En uso", notes: "Favorito para el día" },
   { id: 2, name: "Y Eau de Parfum", brand: "YSL", category: "Perfumes", image: "/images/perfume-bottle.jpg", status: "Guardado", notes: "Para ocasiones especiales" },
@@ -54,20 +61,29 @@ const NAV_ITEMS = [
   { id: "profile" as const, Icon: User, label: "Profile" },
 ]
 
+const EMPTY_NEW_ITEM = {
+  name: "",
+  brand: "",
+  category: "Ropa" as Exclude<Category, "All">,
+  notes: "",
+  status: "Guardado" as Status,
+}
+
 export default function MiInventory() {
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS)
   const [activeCategory, setActiveCategory] = useState<Category>("All")
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<"home" | "categories" | "search" | "profile">("home")
-  
-  // Add item form state
-  const [newItem, setNewItem] = useState({
-    name: "",
-    brand: "",
-    category: "Ropa" as Exclude<Category, "All">,
-    notes: "",
-    status: "Guardado" as Status,
-  })
+
+  const [newItem, setNewItem] = useState(EMPTY_NEW_ITEM)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const [processedBlob, setProcessedBlob] = useState<Blob | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false)
+  const [processStatus, setProcessStatus] = useState("")
+  const [processPercent, setProcessPercent] = useState(0)
+  const [photoError, setPhotoError] = useState<string | null>(null)
 
   const [addSheetWide, setAddSheetWide] = useState(false)
   useEffect(() => {
@@ -78,14 +94,107 @@ export default function MiInventory() {
     return () => mq.removeEventListener("change", update)
   }, [])
 
-  const filteredProducts = activeCategory === "All" 
-    ? mockProducts 
-    : mockProducts.filter(p => p.category === activeCategory)
+  const clearPhotoPreview = useCallback(() => {
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    setProcessedBlob(null)
+    setPhotoError(null)
+    setProcessStatus("")
+    setProcessPercent(0)
+  }, [])
 
-  const statusColors: Record<Status, string> = {
-    "En uso": "bg-[#E8E8E8] text-[#000000]",
-    "Guardado": "bg-[#F0F0F0] text-[#888888]",
-    "Wishlist": "bg-[#F5F5F5] text-[#888888]",
+  const resetAddForm = useCallback(() => {
+    setNewItem(EMPTY_NEW_ITEM)
+    clearPhotoPreview()
+  }, [clearPhotoPreview])
+
+  const handleAddSheetOpenChange = useCallback(
+    (open: boolean) => {
+      setIsAddSheetOpen(open)
+      if (!open) resetAddForm()
+    },
+    [resetAddForm]
+  )
+
+  const filteredProducts =
+    activeCategory === "All"
+      ? products
+      : products.filter((p) => p.category === activeCategory)
+
+  const handlePhotoInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+
+    const validationError = validateImageFile(file)
+    if (validationError) {
+      setPhotoError(validationError)
+      toast.error(validationError)
+      return
+    }
+
+    setPhotoError(null)
+    setIsProcessingPhoto(true)
+    setProcessStatus("Starting…")
+    setProcessPercent(0)
+
+    try {
+      const blob = await processUploadedProductPhoto(file, (_stage, message, percent) => {
+        setProcessStatus(message)
+        setProcessPercent(percent)
+      })
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return URL.createObjectURL(blob)
+      })
+      setProcessedBlob(blob)
+      toast.success("Background removed and photo enhanced. Fill in the details below.")
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not process the image. Try another photo."
+      setPhotoError(message)
+      toast.error(message)
+    } finally {
+      setIsProcessingPhoto(false)
+      setProcessStatus("")
+      setProcessPercent(0)
+    }
+  }
+
+  const handleAddProduct = async () => {
+    if (!processedBlob || !previewUrl) {
+      toast.error("Upload a photo first — we will remove the background and enhance it.")
+      return
+    }
+    if (!newItem.name.trim()) {
+      toast.error("Add a name for this item.")
+      return
+    }
+
+    try {
+      const imageDataUrl = await blobToDataUrl(processedBlob)
+      const nextId = products.reduce((max, p) => Math.max(max, p.id), 0) + 1
+      const product: Product = {
+        id: nextId,
+        name: newItem.name.trim(),
+        brand: newItem.brand.trim() || "—",
+        category: newItem.category,
+        image: imageDataUrl,
+        status: newItem.status,
+        notes: newItem.notes.trim() || undefined,
+      }
+      setProducts((prev) => [product, ...prev])
+      URL.revokeObjectURL(previewUrl)
+      setPreviewUrl(null)
+      setProcessedBlob(null)
+      setNewItem(EMPTY_NEW_ITEM)
+      setIsAddSheetOpen(false)
+      toast.success("Item added to your inventory.")
+    } catch {
+      toast.error("Could not save the image. Try again.")
+    }
   }
 
   return (
@@ -213,7 +322,7 @@ export default function MiInventory() {
             <h2 className="mb-4 text-sm font-semibold text-[#000000] md:text-base">Categories</h2>
             <div className="space-y-3">
               {(["Perfumes", "Ropa", "Zapatillas", "Accesorios"] as const).map((cat) => {
-                const count = mockProducts.filter(p => p.category === cat).length
+                const count = products.filter((p) => p.category === cat).length
                 return (
                   <button
                     key={cat}
@@ -259,19 +368,25 @@ export default function MiInventory() {
             <div className="space-y-4">
               <div className="flex justify-between items-center py-3 border-b border-[#F0F0F0]">
                 <span className="text-sm text-[#000000]">Total Items</span>
-                <span className="text-sm font-medium text-[#000000]">{mockProducts.length}</span>
+                <span className="text-sm font-medium text-[#000000]">{products.length}</span>
               </div>
               <div className="flex justify-between items-center py-3 border-b border-[#F0F0F0]">
                 <span className="text-sm text-[#000000]">En uso</span>
-                <span className="text-sm font-medium text-[#000000]">{mockProducts.filter(p => p.status === "En uso").length}</span>
+                <span className="text-sm font-medium text-[#000000]">
+                  {products.filter((p) => p.status === "En uso").length}
+                </span>
               </div>
               <div className="flex justify-between items-center py-3 border-b border-[#F0F0F0]">
                 <span className="text-sm text-[#000000]">Guardado</span>
-                <span className="text-sm font-medium text-[#000000]">{mockProducts.filter(p => p.status === "Guardado").length}</span>
+                <span className="text-sm font-medium text-[#000000]">
+                  {products.filter((p) => p.status === "Guardado").length}
+                </span>
               </div>
               <div className="flex justify-between items-center py-3 border-b border-[#F0F0F0]">
                 <span className="text-sm text-[#000000]">Wishlist</span>
-                <span className="text-sm font-medium text-[#000000]">{mockProducts.filter(p => p.status === "Wishlist").length}</span>
+                <span className="text-sm font-medium text-[#000000]">
+                  {products.filter((p) => p.status === "Wishlist").length}
+                </span>
               </div>
             </div>
             
@@ -360,7 +475,7 @@ export default function MiInventory() {
       )}
 
       {/* Add Item Sheet */}
-      <Sheet open={isAddSheetOpen} onOpenChange={setIsAddSheetOpen}>
+      <Sheet open={isAddSheetOpen} onOpenChange={handleAddSheetOpenChange}>
         <SheetContent
           side={addSheetWide ? "right" : "bottom"}
           className={cn(
@@ -375,14 +490,80 @@ export default function MiInventory() {
               <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-[#E0E0E0]" />
             )}
             <SheetTitle className="text-lg font-semibold text-[#000000]">Add Item</SheetTitle>
-            <SheetDescription className="sr-only">Add a new item to your inventory</SheetDescription>
+            <SheetDescription>
+              Upload a photo — AI removes the background and enhances the image on your device. Then
+              add details and save.
+            </SheetDescription>
           </SheetHeader>
 
           <div className="max-h-[calc(90vh-8rem)] space-y-5 overflow-y-auto px-6 pb-8 md:max-h-[calc(100vh-6rem)]">
-            {/* Photo Upload */}
-            <div className="aspect-square bg-[#F8F8F8] flex flex-col items-center justify-center cursor-pointer">
-              <Upload className="w-8 h-8 text-[#CCCCCC] mb-2" strokeWidth={1.5} />
-              <span className="text-xs text-[#888888]">Upload photo</span>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic"
+              className="sr-only"
+              onChange={handlePhotoInputChange}
+            />
+
+            {/* Photo upload / preview */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-[#000000]">Photo</p>
+              <button
+                type="button"
+                disabled={isProcessingPhoto}
+                onClick={() => photoInputRef.current?.click()}
+                className={cn(
+                  "relative flex aspect-square w-full flex-col items-center justify-center overflow-hidden border border-dashed border-[#E0E0E0] bg-[#FAFAFA] transition-colors",
+                  !isProcessingPhoto && "cursor-pointer hover:border-[#BBBBBB] hover:bg-[#F5F5F5]",
+                  isProcessingPhoto && "cursor-wait opacity-90"
+                )}
+                style={{
+                  backgroundImage: previewUrl
+                    ? "linear-gradient(45deg, #E8E8E8 25%, transparent 25%), linear-gradient(-45deg, #E8E8E8 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #E8E8E8 75%), linear-gradient(-45deg, transparent 75%, #E8E8E8 75%)"
+                    : undefined,
+                  backgroundSize: previewUrl ? "12px 12px" : undefined,
+                  backgroundPosition: previewUrl ? "0 0, 0 6px, 6px -6px, -6px 0" : undefined,
+                }}
+              >
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt="Processed preview"
+                    className="relative z-10 max-h-[85%] max-w-[85%] object-contain drop-shadow-md"
+                  />
+                ) : null}
+                {!previewUrl && !isProcessingPhoto && (
+                  <div className="flex flex-col items-center gap-2 px-4 text-center">
+                    <ImageIcon className="size-8 text-[#CCCCCC]" strokeWidth={1.5} />
+                    <span className="text-xs text-[#888888]">Tap to upload</span>
+                    <span className="text-[10px] leading-snug text-[#AAAAAA]">
+                      Background removal + enhance (runs in your browser)
+                    </span>
+                  </div>
+                )}
+                {isProcessingPhoto && (
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[#FAFAFA]/90 px-4">
+                    <Spinner className="size-8 text-[#000000]" />
+                    <p className="text-center text-xs font-medium text-[#000000]">{processStatus}</p>
+                    <div className="h-1 w-full max-w-[200px] overflow-hidden bg-[#E8E8E8]">
+                      <div
+                        className="h-full bg-[#000000] transition-[width] duration-300"
+                        style={{ width: `${processPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </button>
+              {previewUrl && !isProcessingPhoto && (
+                <button
+                  type="button"
+                  onClick={clearPhotoPreview}
+                  className="text-xs font-medium text-[#000000] underline underline-offset-2"
+                >
+                  Remove photo
+                </button>
+              )}
+              {photoError && <p className="text-xs text-red-600">{photoError}</p>}
             </div>
             
             {/* Form Fields */}
@@ -459,9 +640,13 @@ export default function MiInventory() {
             </div>
             
             {/* Submit Button */}
-            <Button 
-              className="w-full bg-[#000000] text-[#FFFFFF] rounded-none h-12 text-sm font-medium hover:bg-[#333333]"
-              onClick={() => setIsAddSheetOpen(false)}
+            <Button
+              type="button"
+              className="h-12 w-full rounded-none bg-[#000000] text-sm font-medium text-[#FFFFFF] hover:bg-[#333333] disabled:opacity-50"
+              disabled={
+                !processedBlob || !newItem.name.trim() || isProcessingPhoto
+              }
+              onClick={() => void handleAddProduct()}
             >
               Add to Inventory
             </Button>
