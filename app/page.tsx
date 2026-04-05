@@ -274,7 +274,7 @@ export default function MiInventory() {
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:w-52 md:shrink-0 md:flex-col md:border-r md:border-[#F0F0F0] md:bg-[#FFFFFF] md:py-6 md:px-3">
         <p className="px-3 pb-6 text-xs font-semibold tracking-[0.2em] text-[#000000]">
-          MI INVENTORY
+          Mi inventario
         </p>
         <nav className="flex flex-col gap-1">
           {NAV_ITEMS.map(({ id, Icon, label }) => (
@@ -301,7 +301,7 @@ export default function MiInventory() {
         <header className="sticky top-0 z-40 flex items-center justify-between border-b border-transparent bg-[#FFFFFF] px-4 py-4 md:border-[#F0F0F0] md:px-8 lg:px-10">
           <div className="w-8 md:hidden" aria-hidden />
           <h1 className="absolute left-1/2 -translate-x-1/2 text-xs font-semibold tracking-[0.2em] text-[#000000] md:hidden">
-            MI INVENTORY
+            Mi inventario
           </h1>
           <div className="hidden md:flex-1 md:block" aria-hidden />
           <div className="ml-auto flex items-center gap-2 md:ml-0">
@@ -812,7 +812,7 @@ export default function MiInventory() {
               }
               onClick={() => void handleAddProduct()}
             >
-              {isSavingItem ? "Saving…" : "Add to Inventory"}
+              {isSavingItem ? "Guardando…" : "Añadir al inventario"}
             </Button>
           </div>
         </SheetContent>

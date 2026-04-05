@@ -14,7 +14,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'Mi Inventory',
+  title: 'Mi inventario',
   description: 'Track your personal inventory of perfumes, clothing, sneakers, and accessories',
   generator: 'v0.app',
   icons: {
