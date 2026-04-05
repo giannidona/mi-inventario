@@ -28,17 +28,17 @@ interface Product {
 
 const mockProducts: Product[] = [
   // Perfumes
-  { id: 1, name: "Sauvage", brand: "Dior", category: "Perfumes", image: "/images/sauvage.jpg", status: "En uso", notes: "Favorito para el día" },
-  { id: 2, name: "Y Eau de Parfum", brand: "YSL", category: "Perfumes", image: "/images/ysl-y.jpg", status: "Guardado", notes: "Para ocasiones especiales" },
-  { id: 3, name: "Bleu de Chanel", brand: "Chanel", category: "Perfumes", image: "/images/bleu.jpg", status: "En uso", notes: "Clásico versátil" },
+  { id: 1, name: "Sauvage", brand: "Dior", category: "Perfumes", image: "/images/perfume-bottle.jpg", status: "En uso", notes: "Favorito para el día" },
+  { id: 2, name: "Y Eau de Parfum", brand: "YSL", category: "Perfumes", image: "/images/perfume-bottle.jpg", status: "Guardado", notes: "Para ocasiones especiales" },
+  { id: 3, name: "Bleu de Chanel", brand: "Chanel", category: "Perfumes", image: "/images/perfume-bottle.jpg", status: "En uso", notes: "Clásico versátil" },
   // Zapatillas
-  { id: 4, name: "Air Force 1", brand: "Nike", category: "Zapatillas", image: "/images/af1.jpg", status: "En uso" },
-  { id: 5, name: "Samba OG", brand: "Adidas", category: "Zapatillas", image: "/images/samba.jpg", status: "Guardado" },
-  { id: 6, name: "550", brand: "New Balance", category: "Zapatillas", image: "/images/nb550.jpg", status: "Wishlist" },
-  { id: 7, name: "Dunk Low", brand: "Nike", category: "Zapatillas", image: "/images/dunk.jpg", status: "En uso" },
+  { id: 4, name: "Air Force 1", brand: "Nike", category: "Zapatillas", image: "/images/sneaker.jpg", status: "En uso" },
+  { id: 5, name: "Samba OG", brand: "Adidas", category: "Zapatillas", image: "/images/sneaker.jpg", status: "Guardado" },
+  { id: 6, name: "550", brand: "New Balance", category: "Zapatillas", image: "/images/sneaker.jpg", status: "Wishlist" },
+  { id: 7, name: "Dunk Low", brand: "Nike", category: "Zapatillas", image: "/images/sneaker.jpg", status: "En uso" },
   // Ropa
-  { id: 8, name: "Essential Tee", brand: "Fear of God", category: "Ropa", image: "/images/tee.jpg", status: "En uso" },
-  { id: 9, name: "Oxford Shirt", brand: "Uniqlo", category: "Ropa", image: "/images/oxford.jpg", status: "Guardado" },
+  { id: 8, name: "Essential Tee", brand: "Fear of God", category: "Ropa", image: "/images/tshirt.jpg", status: "En uso" },
+  { id: 9, name: "Oxford Shirt", brand: "Uniqlo", category: "Ropa", image: "/images/tshirt.jpg", status: "Guardado" },
   { id: 10, name: "Oversized Hoodie", brand: "Stüssy", category: "Ropa", image: "/images/hoodie.jpg", status: "En uso" },
   // Accesorios
   { id: 11, name: "City Bag", brand: "Arket", category: "Accesorios", image: "/images/bag.jpg", status: "En uso" },
@@ -104,39 +104,43 @@ export default function MiInventory() {
       </div>
 
       {/* Product Grid */}
-      <main className="flex-1 px-2 pb-24 overflow-y-auto">
-        <div className="grid grid-cols-3 gap-1">
-          {filteredProducts.map((product) => (
-            <div
-              key={product.id}
-              className="relative cursor-pointer"
-              onClick={() => setSelectedProduct(product)}
-            >
-              {/* Add Button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setIsAddSheetOpen(true)
-                }}
-                className="absolute top-1 right-1 z-10 w-5 h-5 flex items-center justify-center bg-[#FFFFFF]/80"
+      <main className="flex-1 pb-24 overflow-y-auto flex justify-center">
+        <div className="w-1/2 min-w-[280px] max-w-[400px]">
+          <div className="grid grid-cols-3 gap-3">
+            {filteredProducts.map((product) => (
+              <div
+                key={product.id}
+                className="relative cursor-pointer group"
+                onClick={() => setSelectedProduct(product)}
               >
-                <Plus className="w-3 h-3 text-[#888888]" strokeWidth={2} />
-              </button>
-              
-              {/* Product Image */}
-              <div className="aspect-square bg-[#F8F8F8] flex items-center justify-center p-2">
-                <div className="w-full h-full bg-[#EFEFEF] flex items-center justify-center">
-                  <span className="text-[8px] text-[#CCCCCC] text-center px-1">{product.brand}</span>
+                {/* Add Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsAddSheetOpen(true)
+                  }}
+                  className="absolute top-0 right-0 z-10 w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Plus className="w-3 h-3 text-[#888888]" strokeWidth={2} />
+                </button>
+                
+                {/* Product Image */}
+                <div className="aspect-square flex items-center justify-center">
+                  <img 
+                    src={product.image} 
+                    alt={product.name}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                
+                {/* Product Info */}
+                <div className="pt-1 text-center">
+                  <p className="text-[9px] text-[#888888] truncate">{product.brand}</p>
+                  <p className="text-[10px] font-semibold text-[#000000] truncate">{product.name}</p>
                 </div>
               </div>
-              
-              {/* Product Info */}
-              <div className="p-1.5">
-                <p className="text-[9px] text-[#888888] truncate">{product.brand}</p>
-                <p className="text-[10px] font-semibold text-[#000000] truncate">{product.name}</p>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </main>
 
@@ -199,10 +203,12 @@ export default function MiInventory() {
               
               <div className="px-6 pb-8 overflow-y-auto">
                 {/* Product Image */}
-                <div className="aspect-square bg-[#F8F8F8] flex items-center justify-center mb-6">
-                  <div className="w-3/4 h-3/4 bg-[#EFEFEF] flex items-center justify-center">
-                    <span className="text-sm text-[#CCCCCC]">{selectedProduct.brand}</span>
-                  </div>
+                <div className="aspect-square flex items-center justify-center mb-6">
+                  <img 
+                    src={selectedProduct.image} 
+                    alt={selectedProduct.name}
+                    className="w-full h-full object-contain"
+                  />
                 </div>
                 
                 {/* Product Info */}
