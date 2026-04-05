@@ -1,5 +1,5 @@
 -- Run this in Supabase → SQL Editor (or supabase db push) once.
--- Also enable: Authentication → Providers → Anonymous sign-in.
+-- Then run 20260205200000_public_read_registered_write.sql for lectura pública + registro para subir ítems.
 
 create table if not exists public.inventory_items (
   id uuid primary key default gen_random_uuid(),

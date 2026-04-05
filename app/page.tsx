@@ -2,7 +2,17 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { toast } from "sonner"
-import { Grid3X3, LayoutGrid, Search, User, Plus, ShoppingBag, ImageIcon } from "lucide-react"
+import {
+  Grid3X3,
+  LayoutGrid,
+  Search,
+  User,
+  Plus,
+  ShoppingBag,
+  ImageIcon,
+  LogIn,
+} from "lucide-react"
+import type { Session } from "@supabase/supabase-js"
 import {
   Sheet,
   SheetContent,
@@ -24,6 +34,8 @@ import {
   fetchInventoryItems,
 } from "@/lib/inventory-supabase"
 import { createClient } from "@/utils/supabase/client"
+import { canManageInventory, displayUserName } from "@/lib/auth-utils"
+import { InventoryAuthSheet } from "@/components/inventory-auth-sheet"
 
 type Category = "All" | "Perfumes" | "Ropa" | "Zapatillas" | "Accesorios"
 type Status = "En uso" | "Guardado" | "Wishlist"
@@ -49,9 +61,11 @@ const EMPTY_NEW_ITEM = {
 
 export default function MiInventory() {
   const supabase = useMemo(() => createClient(), [])
-  const [userId, setUserId] = useState<string | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [inventoryLoading, setInventoryLoading] = useState(true)
+  const [authSheetOpen, setAuthSheetOpen] = useState(false)
+  const [authSheetMode, setAuthSheetMode] = useState<"signin" | "signup">("signin")
   const [activeCategory, setActiveCategory] = useState<Category>("All")
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false)
@@ -71,39 +85,64 @@ export default function MiInventory() {
 
   useEffect(() => {
     let cancelled = false
-    async function initInventory() {
+    async function loadPublicInventory() {
       setInventoryLoading(true)
       try {
-        let {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!session) {
-          const { data, error } = await supabase.auth.signInAnonymously()
-          if (error) throw error
-          session = data.session
-        }
-        const uid = session?.user?.id
-        if (!uid) throw new Error("Missing user")
-        if (cancelled) return
-        setUserId(uid)
         const items = await fetchInventoryItems(supabase)
         if (!cancelled) setProducts(items)
       } catch (e) {
         console.error(e)
         if (!cancelled) {
           toast.error(
-            "Could not load inventory. Run the SQL migration in Supabase and enable Anonymous sign-in (Authentication → Providers)."
+            "No se pudo cargar el inventario. Revisa la conexión y las políticas RLS en Supabase."
           )
         }
       } finally {
         if (!cancelled) setInventoryLoading(false)
       }
     }
-    void initInventory()
+    void loadPublicInventory()
     return () => {
       cancelled = true
     }
   }, [supabase])
+
+  useEffect(() => {
+    async function syncSession() {
+      const {
+        data: { session: s },
+      } = await supabase.auth.getSession()
+      if (s?.user?.is_anonymous) {
+        await supabase.auth.signOut()
+        setSession(null)
+        return
+      }
+      setSession(s)
+    }
+    void syncSession()
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, s) => {
+      if (s?.user?.is_anonymous) {
+        await supabase.auth.signOut()
+        setSession(null)
+        return
+      }
+      setSession(s)
+    })
+    return () => subscription.unsubscribe()
+  }, [supabase])
+
+  const contributor = canManageInventory(session?.user)
+
+  const openAddItemSheet = useCallback(() => {
+    if (!contributor) {
+      setAuthSheetMode("signup")
+      setAuthSheetOpen(true)
+      return
+    }
+    setIsAddSheetOpen(true)
+  }, [contributor])
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)")
@@ -136,6 +175,13 @@ export default function MiInventory() {
     },
     [resetAddForm]
   )
+
+  useEffect(() => {
+    if (!contributor && isAddSheetOpen) {
+      setIsAddSheetOpen(false)
+      resetAddForm()
+    }
+  }, [contributor, isAddSheetOpen, resetAddForm])
 
   const filteredProducts =
     activeCategory === "All"
@@ -183,8 +229,9 @@ export default function MiInventory() {
   }
 
   const handleAddProduct = async () => {
-    if (!userId) {
-      toast.error("Session not ready. Wait a moment or refresh the page.")
+    const uid = session?.user?.id
+    if (!contributor || !uid) {
+      toast.error("Inicia sesión o crea una cuenta para guardar ítems.")
       return
     }
     if (!processedBlob || !previewUrl) {
@@ -198,7 +245,7 @@ export default function MiInventory() {
 
     setIsSavingItem(true)
     try {
-      const product = await createInventoryItem(supabase, userId, processedBlob, {
+      const product = await createInventoryItem(supabase, uid, processedBlob, {
         name: newItem.name.trim(),
         brand: newItem.brand.trim() || "—",
         category: newItem.category,
@@ -211,7 +258,7 @@ export default function MiInventory() {
       setProcessedBlob(null)
       setNewItem(EMPTY_NEW_ITEM)
       setIsAddSheetOpen(false)
-      toast.success("Item saved to your account.")
+      toast.success("Ítem guardado.")
     } catch (e) {
       console.error(e)
       toast.error(
@@ -256,14 +303,29 @@ export default function MiInventory() {
           <h1 className="absolute left-1/2 -translate-x-1/2 text-xs font-semibold tracking-[0.2em] text-[#000000] md:hidden">
             MI INVENTORY
           </h1>
-          <div className="hidden md:block md:flex-1" aria-hidden />
-          <button
-            type="button"
-            className="ml-auto flex size-8 shrink-0 items-center justify-center md:ml-0"
-            aria-label="Bag"
-          >
-            <ShoppingBag className="size-5 text-[#000000]" strokeWidth={1.5} />
-          </button>
+          <div className="hidden md:flex-1 md:block" aria-hidden />
+          <div className="ml-auto flex items-center gap-2 md:ml-0">
+            {!contributor && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthSheetMode("signin")
+                  setAuthSheetOpen(true)
+                }}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-[#000000] hover:bg-[#F5F5F5]"
+              >
+                <LogIn className="size-4" strokeWidth={1.5} />
+                <span className="hidden sm:inline">Entrar</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className="flex size-8 shrink-0 items-center justify-center"
+              aria-label="Bag"
+            >
+              <ShoppingBag className="size-5 text-[#000000]" strokeWidth={1.5} />
+            </button>
+          </div>
         </header>
 
         {/* Category Filters - Only show on home tab */}
@@ -309,14 +371,16 @@ export default function MiInventory() {
                 <div className="flex min-h-[45vh] flex-col items-center justify-center gap-2 px-4 text-center">
                   <p className="text-sm font-medium text-[#000000]">No items yet</p>
                   <p className="max-w-sm text-xs text-[#888888]">
-                    Add a photo to create your first item. It will be saved to your account.
+                    {contributor
+                      ? "Añade una foto para crear tu primer ítem."
+                      : "Explora sin cuenta. Para publicar, regístrate con nombre y contraseña."}
                   </p>
                   <Button
                     type="button"
                     className="mt-2 bg-[#000000] text-[#FFFFFF] hover:bg-[#333333]"
-                    onClick={() => setIsAddSheetOpen(true)}
+                    onClick={openAddItemSheet}
                   >
-                    Add item
+                    {contributor ? "Añadir ítem" : "Registrarse para publicar"}
                   </Button>
                 </div>
               ) : (
@@ -327,17 +391,19 @@ export default function MiInventory() {
                       className="group relative cursor-pointer"
                       onClick={() => setSelectedProduct(product)}
                     >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setIsAddSheetOpen(true)
-                        }}
-                        className="absolute top-0 right-0 z-10 flex size-6 items-center justify-center opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-100 max-md:pointer-events-auto max-md:opacity-100 md:size-5"
-                        aria-label="Add item"
-                      >
-                        <Plus className="size-3 text-[#888888]" strokeWidth={2} />
-                      </button>
+                      {contributor && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setIsAddSheetOpen(true)
+                          }}
+                          className="absolute top-0 right-0 z-10 flex size-6 items-center justify-center opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-100 max-md:pointer-events-auto max-md:opacity-100 md:size-5"
+                          aria-label="Añadir ítem"
+                        >
+                          <Plus className="size-3 text-[#888888]" strokeWidth={2} />
+                        </button>
+                      )}
 
                       <div className="flex aspect-square items-center justify-center">
                         <img
@@ -404,16 +470,54 @@ export default function MiInventory() {
         {/* Profile Tab */}
         {activeTab === "profile" && (
           <div className="mx-auto w-full max-w-2xl px-4 py-4 sm:px-6 md:px-8 lg:px-10">
-            <div className="flex flex-col items-center mb-8">
-              <div className="w-20 h-20 bg-[#F0F0F0] rounded-full flex items-center justify-center mb-3">
-                <User className="w-8 h-8 text-[#888888]" strokeWidth={1.5} />
+            <div className="mb-8 flex flex-col items-center">
+              <div className="mb-3 flex size-20 items-center justify-center rounded-full bg-[#F0F0F0]">
+                <User className="size-8 text-[#888888]" strokeWidth={1.5} />
               </div>
-              <h2 className="text-sm font-semibold text-[#000000]">My Profile</h2>
+              <h2 className="text-sm font-semibold text-[#000000]">Perfil</h2>
+              {contributor ? (
+                <p className="mt-1 max-w-xs text-center text-xs text-[#888888]">
+                  {displayUserName(session?.user)}
+                  {session?.user?.email ? (
+                    <span className="mt-0.5 block text-[#AAAAAA]">{session.user.email}</span>
+                  ) : null}
+                </p>
+              ) : (
+                <p className="mt-2 max-w-xs text-center text-xs text-[#888888]">
+                  Estás viendo el inventario público. Crea una cuenta para publicar tus propios ítems.
+                </p>
+              )}
             </div>
-            
+
+            {!contributor && (
+              <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                <Button
+                  type="button"
+                  className="rounded-none bg-[#000000] text-sm text-[#FFFFFF] hover:bg-[#333333]"
+                  onClick={() => {
+                    setAuthSheetMode("signup")
+                    setAuthSheetOpen(true)
+                  }}
+                >
+                  Crear cuenta
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-none border-[#E0E0E0] text-sm"
+                  onClick={() => {
+                    setAuthSheetMode("signin")
+                    setAuthSheetOpen(true)
+                  }}
+                >
+                  Iniciar sesión
+                </Button>
+              </div>
+            )}
+
             <div className="space-y-4">
               <div className="flex justify-between items-center py-3 border-b border-[#F0F0F0]">
-                <span className="text-sm text-[#000000]">Total Items</span>
+                <span className="text-sm text-[#000000]">Ítems en la app</span>
                 <span className="text-sm font-medium text-[#000000]">{products.length}</span>
               </div>
               <div className="flex justify-between items-center py-3 border-b border-[#F0F0F0]">
@@ -435,14 +539,25 @@ export default function MiInventory() {
                 </span>
               </div>
             </div>
-            
-            <button
-              type="button"
-              onClick={() => setIsAddSheetOpen(true)}
-              className="mt-8 w-full bg-[#000000] py-3 text-sm font-medium text-[#FFFFFF] md:max-w-xs"
-            >
-              Add New Item
-            </button>
+
+            {contributor ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsAddSheetOpen(true)}
+                  className="mt-8 w-full bg-[#000000] py-3 text-sm font-medium text-[#FFFFFF] md:max-w-xs"
+                >
+                  Añadir ítem
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void supabase.auth.signOut()}
+                  className="mt-3 w-full border border-[#E8E8E8] py-3 text-sm font-medium text-[#000000] md:max-w-xs"
+                >
+                  Cerrar sesión
+                </button>
+              </>
+            ) : null}
           </div>
         )}
         </main>
@@ -702,6 +817,13 @@ export default function MiInventory() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <InventoryAuthSheet
+        open={authSheetOpen}
+        onOpenChange={setAuthSheetOpen}
+        supabase={supabase}
+        initialMode={authSheetMode}
+      />
     </div>
   )
 }
