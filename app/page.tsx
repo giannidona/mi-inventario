@@ -83,65 +83,149 @@ export default function MiInventory() {
         </button>
       </header>
 
-      {/* Category Filters */}
-      <div className="px-4 pb-4 overflow-x-auto scrollbar-hide">
-        <div className="flex gap-2">
-          {categories.map((category) => (
-            <button
-              key={category}
-              onClick={() => setActiveCategory(category)}
-              className={cn(
-                "px-4 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
-                activeCategory === category
-                  ? "bg-[#000000] text-[#FFFFFF]"
-                  : "bg-[#F5F5F5] text-[#888888]"
-              )}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Product Grid */}
-      <main className="flex-1 pb-24 overflow-y-auto flex justify-center">
-        <div className="w-1/2 min-w-[280px] max-w-[400px]">
-          <div className="grid grid-cols-3 gap-3">
-            {filteredProducts.map((product) => (
-              <div
-                key={product.id}
-                className="relative cursor-pointer group"
-                onClick={() => setSelectedProduct(product)}
+      {/* Category Filters - Only show on home tab */}
+      {activeTab === "home" && (
+        <div className="px-4 pb-4 overflow-x-auto scrollbar-hide">
+          <div className="flex justify-center gap-2">
+            {categories.map((category) => (
+              <button
+                key={category}
+                onClick={() => setActiveCategory(category)}
+                className={cn(
+                  "px-4 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
+                  activeCategory === category
+                    ? "bg-[#000000] text-[#FFFFFF]"
+                    : "bg-[#F5F5F5] text-[#888888]"
+                )}
               >
-                {/* Add Button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setIsAddSheetOpen(true)
-                  }}
-                  className="absolute top-0 right-0 z-10 w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Plus className="w-3 h-3 text-[#888888]" strokeWidth={2} />
-                </button>
-                
-                {/* Product Image */}
-                <div className="aspect-square flex items-center justify-center">
-                  <img 
-                    src={product.image} 
-                    alt={product.name}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                
-                {/* Product Info */}
-                <div className="pt-1 text-center">
-                  <p className="text-[9px] text-[#888888] truncate">{product.brand}</p>
-                  <p className="text-[10px] font-semibold text-[#000000] truncate">{product.name}</p>
-                </div>
-              </div>
+                {category}
+              </button>
             ))}
           </div>
         </div>
+      )}
+
+      {/* Main Content Area */}
+      <main className="flex-1 pb-24 overflow-y-auto">
+        {/* Home Tab - Product Grid */}
+        {activeTab === "home" && (
+          <div className="flex justify-center">
+            <div className="w-1/2 min-w-[280px] max-w-[400px]">
+              <div className="grid grid-cols-3 gap-3">
+                {filteredProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="relative cursor-pointer group"
+                    onClick={() => setSelectedProduct(product)}
+                  >
+                    {/* Add Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setIsAddSheetOpen(true)
+                      }}
+                      className="absolute top-0 right-0 z-10 w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Plus className="w-3 h-3 text-[#888888]" strokeWidth={2} />
+                    </button>
+                    
+                    {/* Product Image */}
+                    <div className="aspect-square flex items-center justify-center">
+                      <img 
+                        src={product.image} 
+                        alt={product.name}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    
+                    {/* Product Info */}
+                    <div className="pt-1 text-center">
+                      <p className="text-[9px] text-[#888888] truncate">{product.brand}</p>
+                      <p className="text-[10px] font-semibold text-[#000000] truncate">{product.name}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Categories Tab */}
+        {activeTab === "categories" && (
+          <div className="px-6 py-4">
+            <h2 className="text-sm font-semibold text-[#000000] mb-4">Categories</h2>
+            <div className="space-y-3">
+              {(["Perfumes", "Ropa", "Zapatillas", "Accesorios"] as const).map((cat) => {
+                const count = mockProducts.filter(p => p.category === cat).length
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => {
+                      setActiveCategory(cat)
+                      setActiveTab("home")
+                    }}
+                    className="w-full flex items-center justify-between p-4 bg-[#F8F8F8] text-left"
+                  >
+                    <span className="text-sm font-medium text-[#000000]">{cat}</span>
+                    <span className="text-xs text-[#888888]">{count} items</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Search Tab */}
+        {activeTab === "search" && (
+          <div className="px-6 py-4">
+            <div className="relative mb-6">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#888888]" />
+              <Input
+                placeholder="Search items..."
+                className="pl-10 border-[#E8E8E8] rounded-none text-sm bg-[#FFFFFF] text-[#000000] placeholder:text-[#CCCCCC]"
+              />
+            </div>
+            <p className="text-xs text-[#888888] text-center">Search your inventory by name or brand</p>
+          </div>
+        )}
+
+        {/* Profile Tab */}
+        {activeTab === "profile" && (
+          <div className="px-6 py-4">
+            <div className="flex flex-col items-center mb-8">
+              <div className="w-20 h-20 bg-[#F0F0F0] rounded-full flex items-center justify-center mb-3">
+                <User className="w-8 h-8 text-[#888888]" strokeWidth={1.5} />
+              </div>
+              <h2 className="text-sm font-semibold text-[#000000]">My Profile</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex justify-between items-center py-3 border-b border-[#F0F0F0]">
+                <span className="text-sm text-[#000000]">Total Items</span>
+                <span className="text-sm font-medium text-[#000000]">{mockProducts.length}</span>
+              </div>
+              <div className="flex justify-between items-center py-3 border-b border-[#F0F0F0]">
+                <span className="text-sm text-[#000000]">En uso</span>
+                <span className="text-sm font-medium text-[#000000]">{mockProducts.filter(p => p.status === "En uso").length}</span>
+              </div>
+              <div className="flex justify-between items-center py-3 border-b border-[#F0F0F0]">
+                <span className="text-sm text-[#000000]">Guardado</span>
+                <span className="text-sm font-medium text-[#000000]">{mockProducts.filter(p => p.status === "Guardado").length}</span>
+              </div>
+              <div className="flex justify-between items-center py-3 border-b border-[#F0F0F0]">
+                <span className="text-sm text-[#000000]">Wishlist</span>
+                <span className="text-sm font-medium text-[#000000]">{mockProducts.filter(p => p.status === "Wishlist").length}</span>
+              </div>
+            </div>
+            
+            <button 
+              onClick={() => setIsAddSheetOpen(true)}
+              className="w-full mt-8 py-3 bg-[#000000] text-[#FFFFFF] text-sm font-medium"
+            >
+              Add New Item
+            </button>
+          </div>
+        )}
       </main>
 
       {/* Bottom Navigation */}
