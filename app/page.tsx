@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Grid3X3, LayoutGrid, Search, User, Plus, ShoppingBag, Upload } from "lucide-react"
 import {
   Sheet,
@@ -47,6 +47,13 @@ const mockProducts: Product[] = [
 
 const categories: Category[] = ["All", "Perfumes", "Ropa", "Zapatillas", "Accesorios"]
 
+const NAV_ITEMS = [
+  { id: "home" as const, Icon: Grid3X3, label: "Home" },
+  { id: "categories" as const, Icon: LayoutGrid, label: "Categories" },
+  { id: "search" as const, Icon: Search, label: "Search" },
+  { id: "profile" as const, Icon: User, label: "Profile" },
+]
+
 export default function MiInventory() {
   const [activeCategory, setActiveCategory] = useState<Category>("All")
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -62,6 +69,15 @@ export default function MiInventory() {
     status: "Guardado" as Status,
   })
 
+  const [addSheetWide, setAddSheetWide] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)")
+    const update = () => setAddSheetWide(mq.matches)
+    update()
+    mq.addEventListener("change", update)
+    return () => mq.removeEventListener("change", update)
+  }, [])
+
   const filteredProducts = activeCategory === "All" 
     ? mockProducts 
     : mockProducts.filter(p => p.category === activeCategory)
@@ -73,87 +89,128 @@ export default function MiInventory() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFFFF] flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-[#FFFFFF] px-4 py-4 flex items-center justify-between">
-        <div className="w-8" />
-        <h1 className="text-xs font-semibold tracking-[0.2em] text-[#000000]">MI INVENTORY</h1>
-        <button className="w-8 h-8 flex items-center justify-center">
-          <ShoppingBag className="w-5 h-5 text-[#000000]" strokeWidth={1.5} />
-        </button>
-      </header>
+    <div className="flex min-h-dvh flex-col bg-[#FFFFFF] md:flex-row">
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex md:w-52 md:shrink-0 md:flex-col md:border-r md:border-[#F0F0F0] md:bg-[#FFFFFF] md:py-6 md:px-3">
+        <p className="px-3 pb-6 text-xs font-semibold tracking-[0.2em] text-[#000000]">
+          MI INVENTORY
+        </p>
+        <nav className="flex flex-col gap-1">
+          {NAV_ITEMS.map(({ id, Icon, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors",
+                activeTab === id
+                  ? "bg-[#000000] text-[#FFFFFF]"
+                  : "text-[#888888] hover:bg-[#F5F5F5] hover:text-[#000000]"
+              )}
+            >
+              <Icon className="size-5 shrink-0" strokeWidth={1.5} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
 
-      {/* Category Filters - Only show on home tab */}
-      {activeTab === "home" && (
-        <div className="px-4 pb-4 overflow-x-auto scrollbar-hide">
-          <div className="flex justify-center gap-2">
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setActiveCategory(category)}
-                className={cn(
-                  "px-4 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
-                  activeCategory === category
-                    ? "bg-[#000000] text-[#FFFFFF]"
-                    : "bg-[#F5F5F5] text-[#888888]"
-                )}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header */}
+        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-transparent bg-[#FFFFFF] px-4 py-4 md:border-[#F0F0F0] md:px-8 lg:px-10">
+          <div className="w-8 md:hidden" aria-hidden />
+          <h1 className="absolute left-1/2 -translate-x-1/2 text-xs font-semibold tracking-[0.2em] text-[#000000] md:hidden">
+            MI INVENTORY
+          </h1>
+          <div className="hidden md:block md:flex-1" aria-hidden />
+          <button
+            type="button"
+            className="ml-auto flex size-8 shrink-0 items-center justify-center md:ml-0"
+            aria-label="Bag"
+          >
+            <ShoppingBag className="size-5 text-[#000000]" strokeWidth={1.5} />
+          </button>
+        </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 pb-24 overflow-y-auto">
-        {/* Home Tab - Product Grid */}
+        {/* Category Filters - Only show on home tab */}
         {activeTab === "home" && (
-          <div className="flex justify-center">
-            <div className="w-1/2 min-w-[280px] max-w-[400px]">
-              <div className="grid grid-cols-3 gap-3">
+          <div
+            className="w-full min-w-0 overflow-x-auto overscroll-x-contain pb-4 [-webkit-overflow-scrolling:touch] scrollbar-hide [touch-action:pan-x] md:overflow-visible md:px-8 lg:px-10"
+            role="tablist"
+            aria-label="Filter by category"
+          >
+            <div className="flex w-max max-w-none snap-x snap-mandatory gap-2 px-4 md:w-full md:max-w-full md:flex-wrap md:justify-start md:gap-2 md:px-0 md:snap-none">
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeCategory === category}
+                  onClick={() => setActiveCategory(category)}
+                  className={cn(
+                    "shrink-0 snap-start px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors sm:px-4",
+                    activeCategory === category
+                      ? "bg-[#000000] text-[#FFFFFF]"
+                      : "bg-[#F5F5F5] text-[#888888]"
+                  )}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto pb-24 md:pb-8">
+          {/* Home Tab - Product Grid */}
+          {activeTab === "home" && (
+            <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 md:px-8 lg:px-10">
+              <div className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
                 {filteredProducts.map((product) => (
                   <div
                     key={product.id}
-                    className="relative cursor-pointer group"
+                    className="group relative cursor-pointer"
                     onClick={() => setSelectedProduct(product)}
                   >
-                    {/* Add Button */}
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation()
                         setIsAddSheetOpen(true)
                       }}
-                      className="absolute top-0 right-0 z-10 w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-0 right-0 z-10 flex size-6 items-center justify-center opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-100 max-md:pointer-events-auto max-md:opacity-100 md:size-5"
+                      aria-label="Add item"
                     >
-                      <Plus className="w-3 h-3 text-[#888888]" strokeWidth={2} />
+                      <Plus className="size-3 text-[#888888]" strokeWidth={2} />
                     </button>
-                    
-                    {/* Product Image */}
-                    <div className="aspect-square flex items-center justify-center">
-                      <img 
-                        src={product.image} 
+
+                    <div className="flex aspect-square items-center justify-center">
+                      <img
+                        src={product.image}
                         alt={product.name}
-                        className="w-full h-full object-contain"
+                        className="size-full object-contain"
                       />
                     </div>
-                    
-                    {/* Product Info */}
+
                     <div className="pt-1 text-center">
-                      <p className="text-[9px] text-[#888888] truncate">{product.brand}</p>
-                      <p className="text-[10px] font-semibold text-[#000000] truncate">{product.name}</p>
+                      <p className="truncate text-[9px] text-[#888888] md:text-[10px]">
+                        {product.brand}
+                      </p>
+                      <p className="truncate text-[10px] font-semibold text-[#000000] md:text-xs">
+                        {product.name}
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Categories Tab */}
         {activeTab === "categories" && (
-          <div className="px-6 py-4">
-            <h2 className="text-sm font-semibold text-[#000000] mb-4">Categories</h2>
+          <div className="mx-auto w-full max-w-2xl px-4 py-4 sm:px-6 md:px-8 lg:px-10">
+            <h2 className="mb-4 text-sm font-semibold text-[#000000] md:text-base">Categories</h2>
             <div className="space-y-3">
               {(["Perfumes", "Ropa", "Zapatillas", "Accesorios"] as const).map((cat) => {
                 const count = mockProducts.filter(p => p.category === cat).length
@@ -177,12 +234,12 @@ export default function MiInventory() {
 
         {/* Search Tab */}
         {activeTab === "search" && (
-          <div className="px-6 py-4">
+          <div className="mx-auto w-full max-w-2xl px-4 py-4 sm:px-6 md:px-8 lg:px-10">
             <div className="relative mb-6">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#888888]" />
               <Input
                 placeholder="Search items..."
-                className="pl-10 border-[#E8E8E8] rounded-none text-sm bg-[#FFFFFF] text-[#000000] placeholder:text-[#CCCCCC]"
+                className="w-full pl-10 border-[#E8E8E8] rounded-none text-sm bg-[#FFFFFF] text-[#000000] placeholder:text-[#CCCCCC]"
               />
             </div>
             <p className="text-xs text-[#888888] text-center">Search your inventory by name or brand</p>
@@ -191,7 +248,7 @@ export default function MiInventory() {
 
         {/* Profile Tab */}
         {activeTab === "profile" && (
-          <div className="px-6 py-4">
+          <div className="mx-auto w-full max-w-2xl px-4 py-4 sm:px-6 md:px-8 lg:px-10">
             <div className="flex flex-col items-center mb-8">
               <div className="w-20 h-20 bg-[#F0F0F0] rounded-full flex items-center justify-center mb-3">
                 <User className="w-8 h-8 text-[#888888]" strokeWidth={1.5} />
@@ -218,99 +275,82 @@ export default function MiInventory() {
               </div>
             </div>
             
-            <button 
+            <button
+              type="button"
               onClick={() => setIsAddSheetOpen(true)}
-              className="w-full mt-8 py-3 bg-[#000000] text-[#FFFFFF] text-sm font-medium"
+              className="mt-8 w-full bg-[#000000] py-3 text-sm font-medium text-[#FFFFFF] md:max-w-xs"
             >
               Add New Item
             </button>
           </div>
         )}
-      </main>
+        </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-[#FFFFFF] border-t border-[#F0F0F0] px-4 py-2 z-50">
-        <div className="flex justify-around items-center">
-          <button 
-            onClick={() => setActiveTab("home")}
-            className={cn(
-              "flex flex-col items-center gap-0.5 p-2",
-              activeTab === "home" ? "text-[#000000]" : "text-[#888888]"
-            )}
-          >
-            <Grid3X3 className="w-5 h-5" strokeWidth={1.5} />
-            <span className="text-[9px]">Home</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab("categories")}
-            className={cn(
-              "flex flex-col items-center gap-0.5 p-2",
-              activeTab === "categories" ? "text-[#000000]" : "text-[#888888]"
-            )}
-          >
-            <LayoutGrid className="w-5 h-5" strokeWidth={1.5} />
-            <span className="text-[9px]">Categories</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab("search")}
-            className={cn(
-              "flex flex-col items-center gap-0.5 p-2",
-              activeTab === "search" ? "text-[#000000]" : "text-[#888888]"
-            )}
-          >
-            <Search className="w-5 h-5" strokeWidth={1.5} />
-            <span className="text-[9px]">Search</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab("profile")}
-            className={cn(
-              "flex flex-col items-center gap-0.5 p-2",
-              activeTab === "profile" ? "text-[#000000]" : "text-[#888888]"
-            )}
-          >
-            <User className="w-5 h-5" strokeWidth={1.5} />
-            <span className="text-[9px]">Profile</span>
-          </button>
-        </div>
-      </nav>
+        {/* Bottom Navigation — mobile only */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#F0F0F0] bg-[#FFFFFF] px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] md:hidden">
+          <div className="flex items-center justify-around">
+            {NAV_ITEMS.map(({ id, Icon, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={cn(
+                  "flex flex-col items-center gap-0.5 p-2 min-h-[48px] min-w-[48px] justify-center",
+                  activeTab === id ? "text-[#000000]" : "text-[#888888]"
+                )}
+              >
+                <Icon className="size-5" strokeWidth={1.5} />
+                <span className="text-[9px]">{label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+      </div>
 
       {/* Product Detail Popup */}
       {selectedProduct && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-8 cursor-pointer"
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="product-detail-title"
+          className="fixed inset-0 z-60 flex cursor-pointer items-start justify-center overflow-y-auto p-4 sm:items-center sm:p-6 md:p-8"
           onClick={() => setSelectedProduct(null)}
         >
-          {/* Blurred Backdrop */}
           <div className="absolute inset-0 bg-[#000000]/40 backdrop-blur-md" />
-          
-          {/* Popup Content - No background, larger */}
-          <div className="relative w-full max-w-2xl flex items-center gap-10">
-            {/* Product Image - Left Side */}
-            <div className="w-1/2 flex items-center justify-center">
-              <img 
-                src={selectedProduct.image} 
-                alt={selectedProduct.name}
-                className="w-full max-w-[280px] h-auto object-contain drop-shadow-2xl"
+
+          <div
+            className="relative z-10 my-auto flex w-full max-w-2xl cursor-default flex-col items-center gap-6 sm:gap-8 md:max-w-4xl md:flex-row md:items-center md:gap-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex w-full shrink-0 items-center justify-center md:w-1/2">
+              <img
+                src={selectedProduct.image}
+                alt=""
+                className="h-auto max-h-[45vh] w-full max-w-[220px] object-contain drop-shadow-2xl sm:max-h-[50vh] sm:max-w-[280px] md:max-h-none md:max-w-[min(100%,320px)]"
               />
             </div>
-            
-            {/* Product Info - Right Side */}
-            <div className="w-1/2 flex flex-col justify-center">
-              <p className="text-sm text-[#FFFFFF]/70 mb-2">{selectedProduct.brand}</p>
-              <h2 className="text-3xl font-semibold text-[#FFFFFF] mb-6">{selectedProduct.name}</h2>
-              
-              <div className="flex flex-wrap gap-3 mb-6">
-                <span className="px-4 py-2 text-sm font-medium bg-[#FFFFFF]/20 text-[#FFFFFF] backdrop-blur-sm">
+
+            <div className="flex w-full flex-col justify-center text-center md:w-1/2 md:text-left">
+              <p className="mb-2 text-sm text-[#FFFFFF]/70">{selectedProduct.brand}</p>
+              <h2
+                id="product-detail-title"
+                className="mb-4 text-2xl font-semibold text-[#FFFFFF] sm:mb-6 sm:text-3xl"
+              >
+                {selectedProduct.name}
+              </h2>
+
+              <div className="mb-6 flex flex-wrap justify-center gap-3 md:justify-start">
+                <span className="bg-[#FFFFFF]/20 px-4 py-2 text-sm font-medium text-[#FFFFFF] backdrop-blur-sm">
                   {selectedProduct.status}
                 </span>
-                <span className="px-4 py-2 text-sm font-medium bg-[#FFFFFF]/10 text-[#FFFFFF]/80 backdrop-blur-sm">
+                <span className="bg-[#FFFFFF]/10 px-4 py-2 text-sm font-medium text-[#FFFFFF]/80 backdrop-blur-sm">
                   {selectedProduct.category}
                 </span>
               </div>
-              
+
               {selectedProduct.notes && (
                 <div>
-                  <p className="text-xs text-[#FFFFFF]/50 mb-2">Notas</p>
+                  <p className="mb-2 text-xs text-[#FFFFFF]/50">Notas</p>
                   <p className="text-base text-[#FFFFFF]/90">{selectedProduct.notes}</p>
                 </div>
               )}
@@ -321,14 +361,24 @@ export default function MiInventory() {
 
       {/* Add Item Sheet */}
       <Sheet open={isAddSheetOpen} onOpenChange={setIsAddSheetOpen}>
-        <SheetContent side="bottom" className="h-[90vh] rounded-t-[20px] bg-[#FFFFFF] border-none">
-          <SheetHeader className="px-6 pt-2">
-            <div className="w-12 h-1 bg-[#E0E0E0] rounded-full mx-auto mb-4" />
+        <SheetContent
+          side={addSheetWide ? "right" : "bottom"}
+          className={cn(
+            "border-none bg-[#FFFFFF]",
+            addSheetWide
+              ? "h-full w-full max-w-md border-[#F0F0F0]! border-l! p-0 sm:max-w-lg"
+              : "h-[90vh] rounded-t-[20px]"
+          )}
+        >
+          <SheetHeader className={cn("px-6 pt-2", addSheetWide && "pt-6")}>
+            {!addSheetWide && (
+              <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-[#E0E0E0]" />
+            )}
             <SheetTitle className="text-lg font-semibold text-[#000000]">Add Item</SheetTitle>
             <SheetDescription className="sr-only">Add a new item to your inventory</SheetDescription>
           </SheetHeader>
-          
-          <div className="px-6 pb-8 space-y-5 overflow-y-auto">
+
+          <div className="max-h-[calc(90vh-8rem)] space-y-5 overflow-y-auto px-6 pb-8 md:max-h-[calc(100vh-6rem)]">
             {/* Photo Upload */}
             <div className="aspect-square bg-[#F8F8F8] flex flex-col items-center justify-center cursor-pointer">
               <Upload className="w-8 h-8 text-[#CCCCCC] mb-2" strokeWidth={1.5} />
