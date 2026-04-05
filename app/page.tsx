@@ -33,25 +33,6 @@ interface Product {
   status: Status
 }
 
-const INITIAL_PRODUCTS: Product[] = [
-  // Perfumes
-  { id: 1, name: "Sauvage", brand: "Dior", category: "Perfumes", image: "/images/perfume-bottle.jpg", status: "En uso", notes: "Favorito para el día" },
-  { id: 2, name: "Y Eau de Parfum", brand: "YSL", category: "Perfumes", image: "/images/perfume-bottle.jpg", status: "Guardado", notes: "Para ocasiones especiales" },
-  { id: 3, name: "Bleu de Chanel", brand: "Chanel", category: "Perfumes", image: "/images/perfume-bottle.jpg", status: "En uso", notes: "Clásico versátil" },
-  // Zapatillas
-  { id: 4, name: "Air Force 1", brand: "Nike", category: "Zapatillas", image: "/images/sneaker.jpg", status: "En uso" },
-  { id: 5, name: "Samba OG", brand: "Adidas", category: "Zapatillas", image: "/images/sneaker.jpg", status: "Guardado" },
-  { id: 6, name: "550", brand: "New Balance", category: "Zapatillas", image: "/images/sneaker.jpg", status: "Wishlist" },
-  { id: 7, name: "Dunk Low", brand: "Nike", category: "Zapatillas", image: "/images/sneaker.jpg", status: "En uso" },
-  // Ropa
-  { id: 8, name: "Essential Tee", brand: "Fear of God", category: "Ropa", image: "/images/tshirt.jpg", status: "En uso" },
-  { id: 9, name: "Oxford Shirt", brand: "Uniqlo", category: "Ropa", image: "/images/tshirt.jpg", status: "Guardado" },
-  { id: 10, name: "Oversized Hoodie", brand: "Stüssy", category: "Ropa", image: "/images/hoodie.jpg", status: "En uso" },
-  // Accesorios
-  { id: 11, name: "City Bag", brand: "Arket", category: "Accesorios", image: "/images/bag.jpg", status: "En uso" },
-  { id: 12, name: "Logo Cap", brand: "Carhartt WIP", category: "Accesorios", image: "/images/cap.jpg", status: "Guardado" },
-]
-
 const categories: Category[] = ["All", "Perfumes", "Ropa", "Zapatillas", "Accesorios"]
 
 const NAV_ITEMS = [
@@ -70,7 +51,7 @@ const EMPTY_NEW_ITEM = {
 }
 
 export default function MiInventory() {
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS)
+  const [products, setProducts] = useState<Product[]>([])
   const [activeCategory, setActiveCategory] = useState<Category>("All")
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false)
