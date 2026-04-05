@@ -1,7 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { InventoryCategory, InventoryProduct, InventoryStatus } from "@/lib/inventory-types"
+import { normalizeUsername } from "@/lib/username"
 
 const BUCKET = "inventory-images"
+
+export interface PublicProfile {
+  id: string
+  username: string
+  display_name: string | null
+}
 
 export interface InventoryItemRow {
   id: string
@@ -35,17 +42,59 @@ function rowToProduct(
   }
 }
 
-export async function fetchInventoryItems(
-  supabase: SupabaseClient
+/** Lista ítems visibles en la página pública /@username (usa RPC). */
+export async function fetchInventoryByUsername(
+  supabase: SupabaseClient,
+  username: string
 ): Promise<InventoryProduct[]> {
-  const { data, error } = await supabase
-    .from("inventory_items")
-    .select("*")
-    .order("created_at", { ascending: false })
-
+  const u = normalizeUsername(username)
+  const { data, error } = await supabase.rpc("get_inventory_by_username", {
+    p_username: u,
+  })
   if (error) throw error
   const rows = (data ?? []) as InventoryItemRow[]
   return rows.map((row) => rowToProduct(supabase, row))
+}
+
+export async function getProfileByUsername(
+  supabase: SupabaseClient,
+  username: string
+): Promise<PublicProfile | null> {
+  const u = normalizeUsername(username)
+  const { data, error } = await supabase.rpc("get_profile_by_username", {
+    p_username: u,
+  })
+  if (error) throw error
+  if (data == null) return null
+  const list = Array.isArray(data) ? data : [data]
+  const row = list[0] as { id: string; username: string; display_name: string | null } | undefined
+  if (!row?.id) return null
+  const r = row
+  return {
+    id: r.id,
+    username: r.username,
+    display_name: r.display_name,
+  }
+}
+
+export async function checkUsernameAvailable(
+  supabase: SupabaseClient,
+  username: string
+): Promise<boolean> {
+  const u = normalizeUsername(username)
+  const { data, error } = await supabase.rpc("is_username_available", {
+    p_username: u,
+  })
+  if (error) throw error
+  return data === true
+}
+
+/** Ítems del usuario autenticado (misma lista que en su URL pública). */
+export async function fetchMyInventoryItems(
+  supabase: SupabaseClient,
+  myUsername: string
+): Promise<InventoryProduct[]> {
+  return fetchInventoryByUsername(supabase, myUsername)
 }
 
 export async function createInventoryItem(

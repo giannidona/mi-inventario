@@ -13,6 +13,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { checkUsernameAvailable } from "@/lib/inventory-supabase"
+import { normalizeUsername, validateUsernameFormat } from "@/lib/username"
 
 type Mode = "signin" | "signup"
 
@@ -21,6 +23,7 @@ interface InventoryAuthSheetProps {
   onOpenChange: (open: boolean) => void
   supabase: SupabaseClient
   initialMode?: Mode
+  onAuthSuccess?: (username: string) => void
 }
 
 export function InventoryAuthSheet({
@@ -28,8 +31,10 @@ export function InventoryAuthSheet({
   onOpenChange,
   supabase,
   initialMode = "signin",
+  onAuthSuccess,
 }: InventoryAuthSheetProps) {
   const [mode, setMode] = useState<Mode>(initialMode)
+  const [handle, setHandle] = useState("")
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -41,10 +46,26 @@ export function InventoryAuthSheet({
   }, [open, initialMode])
 
   const resetFields = () => {
+    setHandle("")
     setName("")
     setEmail("")
     setPassword("")
     setConfirm("")
+  }
+
+  async function finishAuthAndRedirect() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle()
+    if (prof?.username) {
+      onAuthSuccess?.(prof.username)
+    }
   }
 
   const handleOpenChange = (next: boolean) => {
@@ -65,6 +86,7 @@ export function InventoryAuthSheet({
       })
       if (error) throw error
       toast.success("Sesión iniciada.")
+      await finishAuthAndRedirect()
       resetFields()
       onOpenChange(false)
     } catch (e) {
@@ -75,6 +97,12 @@ export function InventoryAuthSheet({
   }
 
   const handleSignUp = async () => {
+    const userSlug = normalizeUsername(handle)
+    const fmtErr = validateUsernameFormat(userSlug)
+    if (fmtErr) {
+      toast.error(fmtErr)
+      return
+    }
     if (!name.trim()) {
       toast.error("Indica tu nombre.")
       return
@@ -93,24 +121,34 @@ export function InventoryAuthSheet({
     }
     setLoading(true)
     try {
+      const available = await checkUsernameAvailable(supabase, userSlug)
+      if (!available) {
+        toast.error("Ese usuario ya está en uso. Probá otro.")
+        setLoading(false)
+        return
+      }
       const origin =
         typeof window !== "undefined" ? window.location.origin : undefined
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
-          data: { full_name: name.trim() },
+          data: {
+            full_name: name.trim(),
+            username: userSlug,
+          },
           emailRedirectTo: origin ? `${origin}/` : undefined,
         },
       })
       if (error) throw error
       if (data.session) {
-        toast.success("Cuenta creada. Ya puedes publicar ítems.")
+        toast.success("Cuenta creada. Tu inventario es público en tu enlace.")
+        await finishAuthAndRedirect()
         resetFields()
         onOpenChange(false)
       } else {
         toast.success(
-          "Revisa tu correo para confirmar la cuenta (si la confirmación está activada en Supabase)."
+          "Revisa tu correo para confirmar. Después entrá con tu usuario y contraseña."
         )
         resetFields()
         onOpenChange(false)
@@ -133,7 +171,7 @@ export function InventoryAuthSheet({
             {mode === "signin" ? "Iniciar sesión" : "Crear cuenta"}
           </SheetTitle>
           <SheetDescription className="text-xs text-[#888888]">
-            Necesitas cuenta para subir ítems. Ver el inventario no requiere registro.
+            Registrate con un usuario único: tu inventario será público en /tuusuario.
           </SheetDescription>
         </SheetHeader>
 
@@ -166,16 +204,38 @@ export function InventoryAuthSheet({
 
         <div className="space-y-4">
           {mode === "signup" && (
-            <div>
-              <label className="mb-1.5 block text-xs text-[#888888]">Nombre</label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
-                placeholder="Tu nombre"
-                className="rounded-none border-[#E8E8E8] bg-[#FFFFFF] text-sm text-[#000000]"
-              />
-            </div>
+            <>
+              <div>
+                <label className="mb-1.5 block text-xs text-[#888888]">
+                  Usuario (tu enlace)
+                </label>
+                <div className="flex items-center gap-1 rounded-none border border-[#E8E8E8] bg-[#FFFFFF] px-3 text-sm">
+                  <span className="shrink-0 text-[#888888]">/</span>
+                  <Input
+                    value={handle}
+                    onChange={(e) =>
+                      setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+                    }
+                    autoComplete="username"
+                    placeholder="giannidona"
+                    className="border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
+                  />
+                </div>
+                <p className="mt-1 text-[10px] text-[#AAAAAA]">
+                  Solo minúsculas, números y _. Entre 3 y 30 caracteres.
+                </p>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-[#888888]">Nombre</label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                  placeholder="Tu nombre"
+                  className="rounded-none border-[#E8E8E8] bg-[#FFFFFF] text-sm text-[#000000]"
+                />
+              </div>
+            </>
           )}
           <div>
             <label className="mb-1.5 block text-xs text-[#888888]">Email</label>
