@@ -33,6 +33,7 @@ export default function HomePage() {
 
   const handleAuthSuccess = useCallback(
     (username: string) => {
+      router.refresh()
       router.push(`/${normalizeUsername(username)}`)
     },
     [router]

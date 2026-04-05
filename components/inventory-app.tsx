@@ -200,6 +200,7 @@ export function InventoryApp({ profileUsername }: InventoryAppProps) {
 
   const handleAuthSuccess = useCallback(
     (username: string) => {
+      router.refresh()
       router.push(`/${normalizeUsername(username)}`)
     },
     [router]

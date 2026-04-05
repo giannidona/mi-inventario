@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import type { SupabaseClient, User } from "@supabase/supabase-js"
 import { toast } from "sonner"
 import {
   Sheet,
@@ -53,19 +53,40 @@ export function InventoryAuthSheet({
     setConfirm("")
   }
 
-  async function finishAuthAndRedirect() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+  function resolveUsernameForRedirect(user: User): string | null {
+    const meta = user.user_metadata
+    const fromMeta =
+      typeof meta?.username === "string" ? normalizeUsername(meta.username) : ""
+    if (fromMeta && !validateUsernameFormat(fromMeta)) {
+      return fromMeta
+    }
+    return null
+  }
+
+  async function finishAuthAndRedirect(user: User | null) {
     if (!user) return
-    const { data: prof } = await supabase
+    const { data: prof, error: profErr } = await supabase
       .from("profiles")
       .select("username")
       .eq("id", user.id)
       .maybeSingle()
-    if (prof?.username) {
-      onAuthSuccess?.(prof.username)
+    if (profErr) {
+      console.error(profErr)
     }
+    const fromRow = prof?.username?.trim()
+      ? normalizeUsername(prof.username)
+      : null
+    const slug =
+      fromRow && !validateUsernameFormat(fromRow)
+        ? fromRow
+        : resolveUsernameForRedirect(user)
+    if (slug) {
+      onAuthSuccess?.(slug)
+      return
+    }
+    toast.error(
+      "Iniciaste sesión, pero esta cuenta no tiene un @ de inventario. Si es una cuenta vieja, creá la fila en la tabla profiles en Supabase o registrate de nuevo con un usuario."
+    )
   }
 
   const handleOpenChange = (next: boolean) => {
@@ -80,13 +101,13 @@ export function InventoryAuthSheet({
     }
     setLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       })
       if (error) throw error
       toast.success("Sesión iniciada.")
-      await finishAuthAndRedirect()
+      await finishAuthAndRedirect(signInData.user ?? null)
       resetFields()
       onOpenChange(false)
     } catch (e) {
@@ -143,7 +164,7 @@ export function InventoryAuthSheet({
       if (error) throw error
       if (data.session) {
         toast.success("Cuenta creada. Tu inventario es público en tu enlace.")
-        await finishAuthAndRedirect()
+        await finishAuthAndRedirect(data.user ?? null)
         resetFields()
         onOpenChange(false)
       } else {
