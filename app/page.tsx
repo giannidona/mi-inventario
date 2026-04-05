@@ -274,55 +274,61 @@ export default function MiInventory() {
         </div>
       </nav>
 
-      {/* Product Detail Sheet */}
-      <Sheet open={!!selectedProduct} onOpenChange={() => setSelectedProduct(null)}>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-[20px] bg-[#FFFFFF] border-none">
-          {selectedProduct && (
-            <>
-              <SheetHeader className="px-6 pt-2">
-                <div className="w-12 h-1 bg-[#E0E0E0] rounded-full mx-auto mb-4" />
-                <SheetTitle className="sr-only">{selectedProduct.name}</SheetTitle>
-                <SheetDescription className="sr-only">Product details for {selectedProduct.name}</SheetDescription>
-              </SheetHeader>
+      {/* Product Detail Popup */}
+      {selectedProduct && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedProduct(null)}
+        >
+          {/* Blurred Backdrop */}
+          <div className="absolute inset-0 bg-[#000000]/30 backdrop-blur-sm" />
+          
+          {/* Popup Content */}
+          <div 
+            className="relative bg-[#FFFFFF] w-full max-w-lg flex overflow-hidden shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Product Image - Left Side */}
+            <div className="w-1/2 bg-[#FAFAFA] flex items-center justify-center p-6">
+              <img 
+                src={selectedProduct.image} 
+                alt={selectedProduct.name}
+                className="w-full h-full object-contain"
+              />
+            </div>
+            
+            {/* Product Info - Right Side */}
+            <div className="w-1/2 p-6 flex flex-col justify-center">
+              <p className="text-xs text-[#888888] mb-1">{selectedProduct.brand}</p>
+              <h2 className="text-lg font-semibold text-[#000000] mb-4">{selectedProduct.name}</h2>
               
-              <div className="px-6 pb-8 overflow-y-auto">
-                {/* Product Image */}
-                <div className="aspect-square flex items-center justify-center mb-6">
-                  <img 
-                    src={selectedProduct.image} 
-                    alt={selectedProduct.name}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                
-                {/* Product Info */}
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm text-[#888888]">{selectedProduct.brand}</p>
-                    <h2 className="text-xl font-semibold text-[#000000]">{selectedProduct.name}</h2>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <span className={cn("px-3 py-1 text-xs font-medium", statusColors[selectedProduct.status])}>
-                      {selectedProduct.status}
-                    </span>
-                    <span className="px-3 py-1 text-xs font-medium bg-[#F5F5F5] text-[#888888]">
-                      {selectedProduct.category}
-                    </span>
-                  </div>
-                  
-                  {selectedProduct.notes && (
-                    <div>
-                      <p className="text-xs text-[#888888] mb-1">Notas</p>
-                      <p className="text-sm text-[#000000]">{selectedProduct.notes}</p>
-                    </div>
-                  )}
-                </div>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className={cn("px-3 py-1 text-xs font-medium", statusColors[selectedProduct.status])}>
+                  {selectedProduct.status}
+                </span>
+                <span className="px-3 py-1 text-xs font-medium bg-[#F5F5F5] text-[#888888]">
+                  {selectedProduct.category}
+                </span>
               </div>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+              
+              {selectedProduct.notes && (
+                <div>
+                  <p className="text-[10px] text-[#888888] mb-1">Notas</p>
+                  <p className="text-sm text-[#000000]">{selectedProduct.notes}</p>
+                </div>
+              )}
+              
+              {/* Close button */}
+              <button 
+                onClick={() => setSelectedProduct(null)}
+                className="mt-6 py-2 text-xs text-[#888888] hover:text-[#000000] transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Item Sheet */}
       <Sheet open={isAddSheetOpen} onOpenChange={setIsAddSheetOpen}>
