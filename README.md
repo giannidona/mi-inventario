@@ -20,9 +20,9 @@ yarn dev
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Public app: [https://minventario.vercel.app/](https://minventario.vercel.app/)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+After `npm run dev`, open the URL shown in the terminal to preview changes locally. You can start editing the page by modifying `app/page.tsx`; it auto-updates as you save.
 
 ## Learn More
 
