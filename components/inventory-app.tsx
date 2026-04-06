@@ -9,7 +9,7 @@ import {
   Search,
   User,
   Plus,
-  ShoppingBag,
+  ImagePlus,
   ImageIcon,
   LogIn,
 } from "lucide-react"
@@ -36,7 +36,7 @@ import {
   getProfileByUsername,
   type PublicProfile,
 } from "@/lib/inventory-supabase"
-import { normalizeUsername } from "@/lib/username"
+import { normalizeUsername, validateUsernameFormat } from "@/lib/username"
 import { createClient } from "@/utils/supabase/client"
 import { canManageInventory, displayUserName } from "@/lib/auth-utils"
 import { InventoryAuthSheet } from "@/components/inventory-auth-sheet"
@@ -85,6 +85,7 @@ export function InventoryApp({ profileUsername }: InventoryAppProps) {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<"home" | "categories" | "search" | "profile">("home")
+  const [inventorySearchQuery, setInventorySearchQuery] = useState("")
 
   const [newItem, setNewItem] = useState(EMPTY_NEW_ITEM)
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -245,10 +246,58 @@ export function InventoryApp({ profileUsername }: InventoryAppProps) {
     }
   }, [isOwnProfile, isAddSheetOpen, resetAddForm])
 
-  const filteredProducts =
-    activeCategory === "All"
-      ? products
-      : products.filter((p) => p.category === activeCategory)
+  useEffect(() => {
+    setInventorySearchQuery("")
+  }, [normalizedSlug])
+
+  const tryNavigateToProfileFromSearch = useCallback(() => {
+    const raw = inventorySearchQuery.trim()
+    if (!raw.startsWith("@")) {
+      toast.message("Para ir a otro inventario escribí @usuario (ej. @maria).")
+      return
+    }
+    const slug = normalizeUsername(raw)
+    const err = validateUsernameFormat(slug)
+    if (err) {
+      toast.error(err)
+      return
+    }
+    if (slug === normalizedSlug) {
+      toast.message("Ya estás en este perfil.")
+      return
+    }
+    router.push(`/${slug}`)
+    setInventorySearchQuery("")
+  }, [inventorySearchQuery, normalizedSlug, router])
+
+  const filteredProducts = useMemo(() => {
+    const categoryFiltered =
+      activeCategory === "All"
+        ? products
+        : products.filter((p) => p.category === activeCategory)
+    const raw = inventorySearchQuery.trim()
+    if (!raw || raw.startsWith("@")) {
+      return categoryFiltered
+    }
+    const q = raw.toLowerCase()
+    return categoryFiltered.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.brand.toLowerCase().includes(q) ||
+        (p.notes?.toLowerCase().includes(q) ?? false)
+    )
+  }, [products, activeCategory, inventorySearchQuery])
+
+  const handleInventorySearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== "Enter") return
+      e.preventDefault()
+      if (inventorySearchQuery.trim().startsWith("@")) {
+        tryNavigateToProfileFromSearch()
+      }
+    },
+    [inventorySearchQuery, tryNavigateToProfileFromSearch]
+  )
 
   const handlePhotoInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -397,39 +446,77 @@ export function InventoryApp({ profileUsername }: InventoryAppProps) {
             )}
             <button
               type="button"
-              className="flex size-8 shrink-0 items-center justify-center"
-              aria-label="Bag"
+              onClick={() => openAddItemSheet()}
+              className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-[#000000] hover:bg-[#F5F5F5]"
+              aria-label="Añadir ítem"
             >
-              <ShoppingBag className="size-5 text-[#000000]" strokeWidth={1.5} />
+              <ImagePlus className="size-5 shrink-0" strokeWidth={1.5} />
+              <span className="hidden sm:inline">Añadir</span>
             </button>
           </div>
         </header>
 
-        {/* Category Filters - Only show on home tab */}
+        {/* Búsqueda + filtros (solo Inicio) */}
         {activeTab === "home" && (
-          <div
-            className="w-full min-w-0 overflow-x-auto overscroll-x-contain pb-4 [-webkit-overflow-scrolling:touch] scrollbar-hide [touch-action:pan-x] md:overflow-visible md:px-8 lg:px-10"
-            role="tablist"
-            aria-label="Filter by category"
-          >
-            <div className="flex w-max max-w-none snap-x snap-mandatory gap-2 px-4 md:w-full md:max-w-full md:flex-wrap md:justify-start md:gap-2 md:px-0 md:snap-none">
-              {categories.map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeCategory === category}
-                  onClick={() => setActiveCategory(category)}
-                  className={cn(
-                    "shrink-0 snap-start px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors sm:px-4",
-                    activeCategory === category
-                      ? "bg-[#000000] text-[#FFFFFF]"
-                      : "bg-[#F5F5F5] text-[#888888]"
-                  )}
-                >
-                  {category}
-                </button>
-              ))}
+          <div className="mt-4 border-t border-[#F0F0F0] pt-4 md:mt-5 md:pt-5">
+            <div className="px-4 sm:px-6 md:px-8 lg:px-10">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch">
+                <div className="relative min-w-0 flex-1">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#888888]"
+                    strokeWidth={1.5}
+                  />
+                  <Input
+                    value={inventorySearchQuery}
+                    onChange={(e) => setInventorySearchQuery(e.target.value)}
+                    onKeyDown={handleInventorySearchKeyDown}
+                    placeholder="Nombre, marca… o @usuario para otro perfil"
+                    className="h-10 w-full rounded-none border-[#E8E8E8] bg-[#FFFFFF] pl-10 pr-3 text-sm text-[#000000] placeholder:text-[#AAAAAA]"
+                    aria-label="Buscar en este inventario o ir a otro perfil"
+                  />
+                </div>
+                {inventorySearchQuery.trim().startsWith("@") ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 shrink-0 rounded-none border-[#E0E0E0] px-4 text-sm font-medium"
+                    onClick={() => tryNavigateToProfileFromSearch()}
+                  >
+                    Ir al perfil
+                  </Button>
+                ) : null}
+              </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-[#AAAAAA]">
+                Sin arroba filtrás por nombre, marca o notas. Con{" "}
+                <span className="font-medium text-[#888888]">@usuario</span> y Enter (o el botón) abrís
+                otro inventario.
+              </p>
+            </div>
+
+            <div
+              className="mt-4 w-full min-w-0 overflow-x-auto overscroll-x-contain pb-4 [-webkit-overflow-scrolling:touch] scrollbar-hide [touch-action:pan-x] md:overflow-visible md:px-8 lg:px-10"
+              role="tablist"
+              aria-label="Filtrar por categoría"
+            >
+              <div className="flex w-max max-w-none snap-x snap-mandatory gap-2 px-4 md:w-full md:max-w-full md:flex-wrap md:justify-start md:gap-2 md:px-0 md:snap-none">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeCategory === category}
+                    onClick={() => setActiveCategory(category)}
+                    className={cn(
+                      "shrink-0 snap-start px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors sm:px-4",
+                      activeCategory === category
+                        ? "bg-[#000000] text-[#FFFFFF]"
+                        : "bg-[#F5F5F5] text-[#888888]"
+                    )}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -459,7 +546,7 @@ export function InventoryApp({ profileUsername }: InventoryAppProps) {
                     Ir al inicio
                   </Button>
                 </div>
-              ) : filteredProducts.length === 0 ? (
+              ) : products.length === 0 ? (
                 <div className="flex min-h-[45vh] flex-col items-center justify-center gap-2 px-4 text-center">
                   <p className="text-sm font-medium text-[#000000]">Todavía no hay ítems</p>
                   <p className="max-w-sm text-xs text-[#888888]">
@@ -483,6 +570,24 @@ export function InventoryApp({ profileUsername }: InventoryAppProps) {
                       : !contributor
                         ? "Crear mi inventario"
                         : "Ir a mi perfil"}
+                  </Button>
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-4 text-center">
+                  <p className="text-sm font-medium text-[#000000]">Ningún ítem coincide</p>
+                  <p className="max-w-sm text-xs text-[#888888]">
+                    Cambiá la categoría, borrá la búsqueda o probá otras palabras.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-none border-[#E0E0E0]"
+                    onClick={() => {
+                      setActiveCategory("All")
+                      setInventorySearchQuery("")
+                    }}
+                  >
+                    Mostrar todo
                   </Button>
                 </div>
               ) : (
@@ -555,17 +660,75 @@ export function InventoryApp({ profileUsername }: InventoryAppProps) {
           </div>
         )}
 
-        {/* Search Tab */}
+        {/* Search Tab — misma barra que en Inicio + lista rápida */}
         {activeTab === "search" && (
           <div className="mx-auto w-full max-w-2xl px-4 py-4 sm:px-6 md:px-8 lg:px-10">
-            <div className="relative mb-6">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#888888]" />
-              <Input
-                placeholder="Search items..."
-                className="w-full pl-10 border-[#E8E8E8] rounded-none text-sm bg-[#FFFFFF] text-[#000000] placeholder:text-[#CCCCCC]"
-              />
+            <h2 className="mb-3 text-sm font-semibold text-[#000000]">Buscar</h2>
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-stretch">
+              <div className="relative min-w-0 flex-1">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#888888]"
+                  strokeWidth={1.5}
+                />
+                <Input
+                  value={inventorySearchQuery}
+                  onChange={(e) => setInventorySearchQuery(e.target.value)}
+                  onKeyDown={handleInventorySearchKeyDown}
+                  placeholder="Nombre, marca… o @usuario para otro perfil"
+                  className="h-10 w-full rounded-none border-[#E8E8E8] bg-[#FFFFFF] pl-10 pr-3 text-sm text-[#000000] placeholder:text-[#AAAAAA]"
+                  aria-label="Buscar en este inventario o ir a otro perfil"
+                />
+              </div>
+              {inventorySearchQuery.trim().startsWith("@") ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 shrink-0 rounded-none border-[#E0E0E0] px-4 text-sm font-medium"
+                  onClick={() => tryNavigateToProfileFromSearch()}
+                >
+                  Ir al perfil
+                </Button>
+              ) : null}
             </div>
-            <p className="text-xs text-[#888888] text-center">Search your inventory by name or brand</p>
+            <p className="mt-2 text-[10px] text-[#AAAAAA]">
+              Misma búsqueda que arriba en Inicio. Con @ navegás a otro usuario.
+            </p>
+
+            {!inventoryLoading && publicProfile && !inventorySearchQuery.trim().startsWith("@") ? (
+              <ul className="mt-6 space-y-2 border-t border-[#F0F0F0] pt-4">
+                {filteredProducts.length === 0 ? (
+                  <li className="py-6 text-center text-xs text-[#888888]">
+                    {inventorySearchQuery.trim()
+                      ? "Ningún ítem coincide."
+                      : "Escribí para filtrar por nombre o marca."}
+                  </li>
+                ) : (
+                  filteredProducts.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProduct(p)}
+                        className="flex w-full items-center justify-between gap-3 border border-[#F0F0F0] bg-[#FAFAFA] px-3 py-3 text-left transition-colors hover:bg-[#F0F0F0]"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-[#000000]">
+                            {p.name}
+                          </span>
+                          <span className="block truncate text-[11px] text-[#888888]">{p.brand}</span>
+                        </span>
+                        <span className="shrink-0 text-[10px] text-[#AAAAAA]">{p.category}</span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            ) : null}
+
+            {!inventoryLoading && publicProfile && inventorySearchQuery.trim().startsWith("@") ? (
+              <p className="mt-6 text-center text-xs text-[#888888]">
+                Pulsá Enter o &quot;Ir al perfil&quot; para cargar ese inventario.
+              </p>
+            ) : null}
           </div>
         )}
 
